@@ -10,8 +10,9 @@ logger = logging.getLogger(__name__)
 def classify() -> None:
     logger.info("Classifying name components...")
     classifier = NameComponentClassifier()
-    output_path = classifier.run()
-    logger.info("Saved classification dataset to %s", output_path)
+    csv_path, json_path = classifier.run_with_json()
+    logger.info("Saved classification dataset to %s", csv_path)
+    logger.info("Saved classification json to %s", json_path)
 
 
 if __name__ == "__main__":
