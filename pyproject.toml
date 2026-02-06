@@ -1,0 +1,21 @@
+[project]
+name = "drc-names-tagging"
+version = "0.1.0"
+description = "Probabilistic Sequence Tagging of Congolese Name Components via Markov Transitions"
+readme = "README.md"
+authors = [
+    { name = "bernard-ng", email = "ngandubernard@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "polars>=1.38.0",
+    "tqdm>=4.67.3",
+    "typer>=0.21.1",
+]
+
+[project.scripts]
+drc-names-tagging = "drc_names_tagging:main"
+
+[build-system]
+requires = ["uv_build>=0.8.12,<0.9.0"]
+build-backend = "uv_build"
