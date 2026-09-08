@@ -44,15 +44,6 @@ class Ollama:
     def name(self) -> str:
         return "ollama"
 
-    def revision(self) -> str:
-        """Resolve a mutable model tag to the installed model digest for checkpoints."""
-
-        model_name = self.model if ":" in self.model else f"{self.model}:latest"
-        for model in Client(host=self.url, timeout=self.timeout).list().models:
-            if model.model == model_name and model.digest:
-                return model.digest
-        raise ValueError(f"Model '{model_name}' is not installed at {self.url}")
-
     def tag(self, name: str) -> Name:
         source = tokens(name)
         if not source:

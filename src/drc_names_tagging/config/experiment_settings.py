@@ -29,3 +29,7 @@ class ExperimentSettings:
     @property
     def token_dir(self) -> Path:
         return self.outputs_dir / "tokens"
+
+    @property
+    def checkpoint_path(self) -> Path:
+        return self.dataset_path.parent / "annotations.sqlite3"

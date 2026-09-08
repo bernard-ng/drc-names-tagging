@@ -116,6 +116,10 @@ Ollama. Completed batches are saved automatically: rerunning the same command
 resumes from its checkpoint. See [execution settings](docs/execution.md) for
 configuration, Ollama parallelism, and benchmarking.
 
+Annotations are stored in `data/dataset/annotations.sqlite3`, excluded from
+version control. All token experiments use this database, including fresh runs
+with resume disabled; exported CSVs remain in the output directory.
+
 This lexical dataset is an intermediate resource. It can be used to refine
 transition matrices and later supervise a contextual name model, such as a
 token-level NER model. It is not a replacement for contextual full-name

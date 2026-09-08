@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
 import time
 import unittest
@@ -12,8 +13,13 @@ from unittest.mock import patch
 import polars as pl
 from ollama import ChatResponse, Message
 
-from drc_names_tagging.config import ExperimentConfig
-from drc_names_tagging.experiments.tokens import TokenRunner, compare_token_runs
+from drc_names_tagging.config import ExperimentConfig, ExperimentSettings
+from drc_names_tagging.experiments.checkpoint import signature
+from drc_names_tagging.experiments.tokens import (
+    TokenRunner,
+    compare_token_runs,
+    run_tokens,
+)
 from drc_names_tagging.models import Name, Tag, Token
 from drc_names_tagging.taggers.ollama import Ollama
 
@@ -33,6 +39,8 @@ class Fake:
 
 class TokenTests(unittest.TestCase):
     def setUp(self) -> None:
+        self.directory = Path(self.enterContext(TemporaryDirectory()))
+        self.checkpoint = self.directory / "annotations.sqlite3"
         self.words = pl.DataFrame(
             {
                 "token_key": ["alpha", "beta", "gamma", "ndjondo"],
@@ -70,8 +78,18 @@ class TokenTests(unittest.TestCase):
             self.assertEqual(changed.cached_tokens, 0)
 
     def test_cpu_processes_match_serial(self) -> None:
-        serial = TokenRunner().run(Fake(), self.words, batch_size=1)
-        parallel = TokenRunner().run(Fake(), self.words, cpu_workers=2, batch_size=1)
+        serial = TokenRunner().run(
+            Fake(), self.words, batch_size=1, checkpoint=self.checkpoint
+        )
+        parallel = TokenRunner().run(
+            Fake(),
+            self.words,
+            cpu_workers=2,
+            batch_size=1,
+            checkpoint=self.checkpoint,
+            resume=False,
+        )
+        self.assertEqual(parallel.processed_tokens, 4)
         self.assertTrue(serial.table.equals(parallel.table))
 
     def test_failure_drains_inflight_successes(self) -> None:
@@ -110,7 +128,13 @@ class TokenTests(unittest.TestCase):
             return Name(name, (Token(0, name, Tag.NATIVE, 0.9),))
 
         with patch.object(Fake, "tag", side_effect=tag):
-            result = TokenRunner().run(Fake(), self.words, concurrency=2, batch_size=1)
+            result = TokenRunner().run(
+                Fake(),
+                self.words,
+                concurrency=2,
+                batch_size=1,
+                checkpoint=self.checkpoint,
+            )
         self.assertEqual(maximum, 2)
         self.assertEqual(result.table["token"].to_list(), self.words["token"].to_list())
 
@@ -164,9 +188,58 @@ class TokenTests(unittest.TestCase):
                     Ollama().tag_batch(["saint-plus"])
 
     def test_empty_vocabulary(self) -> None:
-        run = TokenRunner().run(Fake(), self.words.head(0))
+        run = TokenRunner().run(Fake(), self.words.head(0), checkpoint=self.checkpoint)
         self.assertEqual(run.table.height, 0)
         self.assertIn("tag", run.table.columns)
+
+    def test_fresh_runs_are_persisted_without_replacing_resume_data(self) -> None:
+        fake = Fake()
+        runs = [TokenRunner().run(fake, self.words, checkpoint=self.checkpoint)]
+        for _ in range(2):
+            runs.append(
+                TokenRunner().run(
+                    fake, self.words, checkpoint=self.checkpoint, resume=False
+                )
+            )
+        self.assertTrue(self.checkpoint.is_file())
+        with sqlite3.connect(self.checkpoint) as connection:
+            self.assertEqual(
+                connection.execute("SELECT count(*) FROM annotations").fetchone()[0], 12
+            )
+            self.assertEqual(
+                connection.execute(
+                    "SELECT count(DISTINCT identity) FROM annotations"
+                ).fetchone()[0],
+                3,
+            )
+            location = connection.execute("PRAGMA database_list").fetchone()[2]
+            self.assertEqual(Path(location), self.checkpoint.resolve())
+        resumed = TokenRunner().run(fake, self.words, checkpoint=self.checkpoint)
+        self.assertEqual(resumed.cached_tokens, 4)
+        self.assertEqual(len({run.checkpoint_identity for run in runs}), 3)
+
+    def test_checkpoint_location_is_independent_of_csv_output(self) -> None:
+        settings = ExperimentSettings(dataset_path=self.directory / "names.csv")
+        fake = Fake()
+        experiment = ExperimentConfig(name="fake")
+        with (
+            patch(
+                "drc_names_tagging.experiments.tokens.Vocabulary.load",
+                return_value=self.words,
+            ),
+            patch(
+                "drc_names_tagging.experiments.tokens.Registry.create",
+                return_value=fake,
+            ),
+        ):
+            run_tokens(experiment, settings, output=self.directory / "first.csv")
+            fake.calls.clear()
+            run_tokens(
+                experiment, settings, output=self.directory / "elsewhere" / "second.csv"
+            )
+        self.assertEqual(fake.calls, [])
+        self.assertTrue(settings.checkpoint_path.is_file())
+        self.assertFalse((self.directory / "first.sqlite3").exists())
 
     def test_execution_config_validation(self) -> None:
         for settings in (
@@ -177,6 +250,15 @@ class TokenTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 ExperimentConfig.from_dict({"name": "invalid", **settings})
+
+    def test_checkpoint_key_is_manual(self) -> None:
+        self.assertEqual(signature("manual-v2"), "manual-v2")
+        self.assertEqual(
+            ExperimentConfig(name="manual", checkpoint_key="  run-3  ").checkpoint_key,
+            "run-3",
+        )
+        with self.assertRaises(ValueError):
+            signature(" ")
 
 
 if __name__ == "__main__":

@@ -6,11 +6,16 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
+from uuid import uuid4
 
 import polars as pl
 from tqdm import tqdm
 
-from drc_names_tagging.config import ExperimentConfig, ExperimentSettings
+from drc_names_tagging.config import (
+    DEFAULT_CHECKPOINT_PATH,
+    ExperimentConfig,
+    ExperimentSettings,
+)
 from drc_names_tagging.dataset import Vocabulary
 from drc_names_tagging.experiments.checkpoint import Checkpoint, signature
 from drc_names_tagging.experiments.execution import execute
@@ -29,6 +34,7 @@ class TokenRun:
     cached_tokens: int = 0
     processed_tokens: int = 0
     batch_attempts: int = 0
+    checkpoint_identity: str = ""
 
 
 class TokenRunner:
@@ -46,7 +52,9 @@ class TokenRunner:
         concurrency: int = 1,
         batch_size: int = 1,
         retries: int = 2,
-        checkpoint: Path | None = None,
+        checkpoint: Path = DEFAULT_CHECKPOINT_PATH,
+        resume: bool = True,
+        checkpoint_key: str | None = None,
     ) -> TokenRun:
         if not 0 < sample_fraction <= 1:
             raise ValueError("sample_fraction must be between zero and one")
@@ -70,7 +78,12 @@ class TokenRunner:
         run_name = label or tagger.name
 
         started = time.perf_counter()
-        store = Checkpoint(checkpoint, signature(tagger, batch_size))
+        identity = signature(checkpoint_key or tagger.name)
+        if not resume:
+            # Fresh measurements still persist their labels, in a separate namespace.
+            # Existing resumable annotations remain available and unchanged.
+            identity = f"{identity}:{uuid4().hex}"
+        store = Checkpoint(checkpoint, identity)
         processed = attempts = 0
         failures: list[tuple[str, str]] = []
         try:
@@ -96,9 +109,8 @@ class TokenRunner:
                     failures.extend(result.failures)
                     progress.update(len(result.annotations))
             if failures:
-                location = f"Checkpoint: {checkpoint}. " if checkpoint else ""
                 raise RuntimeError(
-                    f"{len(failures)} tokens failed after bounded retries. {location}"
+                    f"{len(failures)} tokens failed after bounded retries. Checkpoint: {checkpoint}. "
                     f"First failure: {failures[0]}. Rerun to retry unfinished tokens."
                 )
             output = (
@@ -123,6 +135,7 @@ class TokenRunner:
             cached_tokens=cached,
             processed_tokens=processed,
             batch_attempts=attempts,
+            checkpoint_identity=identity,
         )
 
 
@@ -142,6 +155,7 @@ def compare_token_runs(runs: Iterable[TokenRun]) -> tuple[pl.DataFrame, pl.DataF
                 "cached_tokens": run.cached_tokens,
                 "processed_tokens": run.processed_tokens,
                 "batch_attempts": run.batch_attempts,
+                "checkpoint_identity": run.checkpoint_identity,
                 "tokens_per_second": (
                     run.processed_tokens / run.elapsed if run.elapsed else 0.0
                 ),
@@ -216,7 +230,9 @@ def run_tokens(
         concurrency=experiment.concurrency,
         batch_size=experiment.batch_size,
         retries=experiment.retries,
-        checkpoint=destination.with_suffix(".sqlite3") if experiment.resume else None,
+        checkpoint=settings.checkpoint_path,
+        resume=experiment.resume,
+        checkpoint_key=experiment.checkpoint_key or experiment.name,
     )
     save_table(result.table, destination)
     _, summary = compare_token_runs([result])
@@ -262,9 +278,9 @@ def compare_tokens(
             concurrency=experiment.concurrency,
             batch_size=experiment.batch_size,
             retries=experiment.retries,
-            checkpoint=(destination / f"{experiment.name}.sqlite3")
-            if experiment.resume
-            else None,
+            checkpoint=settings.checkpoint_path,
+            resume=experiment.resume,
+            checkpoint_key=experiment.checkpoint_key or experiment.name,
         )
         results.append(result)
         save_table(result.table, destination / f"{experiment.name}.csv")

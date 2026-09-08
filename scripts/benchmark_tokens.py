@@ -81,6 +81,8 @@ def main() -> None:
                     batch_size=batch,
                     retries=1,
                     label=label,
+                    checkpoint=settings.checkpoint_path,
+                    resume=False,
                 )
                 tags = run.table["tag"].to_list()
                 baseline = tags if baseline is None else baseline
@@ -88,6 +90,7 @@ def main() -> None:
                     elapsed_seconds=run.elapsed,
                     tokens_per_second=run.processed_tokens / run.elapsed,
                     batch_attempts=run.batch_attempts,
+                    checkpoint_identity=run.checkpoint_identity,
                     agreement_with_serial=sum(
                         a == b for a, b in zip(tags, baseline, strict=True)
                     )

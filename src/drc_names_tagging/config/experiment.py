@@ -22,6 +22,7 @@ class ExperimentConfig:
     batch_size: int = 1
     retries: int = 2
     resume: bool = True
+    checkpoint_key: str | None = None
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -46,6 +47,8 @@ class ExperimentConfig:
             raise ValueError("retries must be a non-negative integer")
         if not isinstance(self.resume, bool):
             raise TypeError("resume must be a boolean")
+        if self.checkpoint_key is not None and not self.checkpoint_key.strip():
+            raise ValueError("checkpoint_key must not be empty")
         if self.cpu_workers > 1 and self.concurrency > 1:
             raise ValueError("Select CPU workers or request concurrency, not both")
 
@@ -53,6 +56,8 @@ class ExperimentConfig:
         object.__setattr__(self, "tagger_type", tagger_type)
         object.__setattr__(self, "tags", tuple(self.tags))
         object.__setattr__(self, "tagger_params", dict(self.tagger_params))
+        if self.checkpoint_key is not None:
+            object.__setattr__(self, "checkpoint_key", self.checkpoint_key.strip())
 
     def to_dict(self) -> dict[str, Any]:
         values = asdict(self)

@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import hashlib
-import inspect
 import sqlite3
 from pathlib import Path
 
 import polars as pl
 
 from drc_names_tagging.models import Token
-from drc_names_tagging.taggers.base import Tagger
 
 SCHEMA = {
     "token_key": pl.String,
@@ -18,32 +15,22 @@ SCHEMA = {
 }
 
 
-def signature(tagger: Tagger, batch_size: int) -> str:
-    """Invalidate labels when model settings, matrices, or annotation code change."""
+def signature(checkpoint_key: str) -> str:
+    """Return the user-controlled namespace for persisted annotations."""
 
-    digest = hashlib.sha256(f"v1:{tagger!r}:{batch_size}".encode())
-    revision = getattr(tagger, "revision", None)
-    if callable(revision):
-        digest.update(str(revision()).encode())
-    # Include the module (prompt/schema) and shared scoring/validation logic.
-    paths = [Path(__file__).with_name("execution.py")]
-    source = inspect.getsourcefile(type(tagger))
-    if source:
-        paths.append(Path(source))
-    paths.extend((Path(__file__).parents[1] / "models").glob("*.py"))
-    for path in sorted(paths):
-        if path.is_file():
-            digest.update(path.read_bytes())
-    return digest.hexdigest()
+    key = checkpoint_key.strip()
+    if not key:
+        raise ValueError("checkpoint_key must not be empty")
+    return key
 
 
 class Checkpoint:
     """Commit completed batches while other workers continue computing."""
 
-    def __init__(self, path: Path | None, identity: str) -> None:
-        if path is not None:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(str(path) if path else ":memory:")
+    def __init__(self, path: Path, identity: str) -> None:
+        path = path.resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.connection = sqlite3.connect(str(path))
         self.identity = identity
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute(
