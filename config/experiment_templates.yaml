@@ -21,3 +21,7 @@ baseline_experiments:
     limit: 1000
 
 advanced_experiments: []
+
+token_workflow:
+  # The LLM labels are retained as the preferred training labels for the first phase.
+  reference_tagger: ollama_mistral_7b

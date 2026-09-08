@@ -74,6 +74,27 @@ uv run drc-names-tagging compare \
   --name ollama_mistral_7b
 ```
 
+### Unique-token annotation
+
+The first annotation phase works on the vocabulary of the published dataset,
+not on every occurrence inside every name. Each distinct token is tagged once,
+then reused for comparison and training-data preparation:
+
+```bash
+uv run drc-names-tagging tokens compare
+```
+
+This runs the configured annotators on the same unique-token list, measures
+their agreement, and saves the preferred annotator's labels as reusable
+training data. The preferred annotator is configured in
+`config/experiment_templates.yaml`; the default is the Mistral 7B annotator.
+The resulting files are written to `data/outputs/tokens/`.
+
+This lexical dataset is an intermediate resource. It can be used to refine
+transition matrices and later supervise a contextual name model, such as a
+token-level NER model. It is not a replacement for contextual full-name
+annotation.
+
 ## Published dataset
 
 The published dataset is maintained by the
@@ -99,13 +120,15 @@ The available baseline experiments are:
 
 ## Annotation outputs
 
-Results are written to `data/outputs/tagging/`:
+Full-name annotation results are written to `data/outputs/tagging/`. Unique-token
+annotation results are written to `data/outputs/tokens/`:
 
 | Output | Description |
 | --- | --- |
 | Experiment result | Token-level labels and confidence/score values. |
 | Comparison table | Pairwise agreement between annotators. |
 | Comparison summary | Agreement and processing-throughput summary. |
+| Token training data | Preferred labels for each unique token and its corpus frequency. |
 
 The two labels are mutually exclusive:
 

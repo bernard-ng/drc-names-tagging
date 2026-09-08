@@ -38,6 +38,17 @@ class ExperimentBuilder:
             raise TypeError(f"Template section '{section_name}' must be a list")
         return values
 
+    def token_reference(self) -> str:
+        """Return the configured preferred annotator for token training data."""
+
+        workflow = self.load_templates().get("token_workflow", {})
+        if not isinstance(workflow, dict):
+            raise TypeError("Template section 'token_workflow' must be a mapping")
+        reference = workflow.get("reference_tagger", "ollama_mistral_7b")
+        if not isinstance(reference, str) or not reference.strip():
+            raise ValueError("token_workflow.reference_tagger must be a non-empty string")
+        return reference.strip()
+
     def build(
         self,
         name: str,

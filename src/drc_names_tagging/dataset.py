@@ -12,7 +12,7 @@ class DatasetSchemaError(ValueError):
 
 
 class NameDataset:
-    """Load and normalize the shared names.csv dataset."""
+    """Load and normalize the published name dataset."""
 
     def __init__(self, path: str | Path | None = None) -> None:
         self.path = resolve_dataset(path)
@@ -30,3 +30,21 @@ class NameDataset:
             .alias("name")
         )
         return table.filter(pl.col("name") != "")
+
+
+class TokenDataset:
+    """Load reusable lexical annotations for later model training."""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+
+    def load(self) -> pl.DataFrame:
+        table = pl.read_csv(assert_file(self.path))
+        required = {"token", "tag"}
+        missing = sorted(required.difference(table.columns))
+        if missing:
+            fields = ", ".join(missing)
+            raise DatasetSchemaError(
+                f"Token dataset '{self.path}' is missing required column(s): {fields}."
+            )
+        return table.filter(pl.col("token").fill_null("").cast(pl.String) != "")

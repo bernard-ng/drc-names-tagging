@@ -15,6 +15,8 @@ class ExperimentConfig:
     tagger_params: dict[str, Any] = field(default_factory=dict)
     sample_fraction: float = 0.01
     limit: int | None = 1_000
+    token_sample_fraction: float = 1.0
+    token_limit: int | None = None
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -27,6 +29,10 @@ class ExperimentConfig:
             raise ValueError("sample_fraction must be between zero and one")
         if self.limit is not None and self.limit <= 0:
             raise ValueError("limit must be positive when configured")
+        if not 0 < self.token_sample_fraction <= 1:
+            raise ValueError("token_sample_fraction must be between zero and one")
+        if self.token_limit is not None and self.token_limit <= 0:
+            raise ValueError("token_limit must be positive when configured")
 
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "tagger_type", tagger_type)

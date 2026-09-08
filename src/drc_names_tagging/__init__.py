@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from drc_names_tagging.dataset import DatasetSchemaError, NameDataset
+from drc_names_tagging.dataset import DatasetSchemaError, NameDataset, TokenDataset
 
 __version__ = "0.2.0"
 
@@ -15,4 +15,4 @@ def main() -> None:
     app()
 
 
-__all__ = ["DatasetSchemaError", "NameDataset", "main"]
+__all__ = ["DatasetSchemaError", "NameDataset", "TokenDataset", "main"]

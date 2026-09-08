@@ -9,15 +9,31 @@ from drc_names_tagging.experiments.runner import (
     run_one,
     save_table,
 )
+from drc_names_tagging.experiments.tokens import (
+    TokenRun,
+    TokenRunner,
+    compare_token_runs,
+    compare_tokens,
+    run_tokens,
+    training_table,
+    vocabulary,
+)
 from drc_names_tagging.experiments.transitions import TransitionBuilder
 
 __all__ = [
     "ExperimentBuilder",
     "Run",
     "Runner",
+    "TokenRun",
+    "TokenRunner",
     "TransitionBuilder",
     "compare",
     "compare_runs",
+    "compare_token_runs",
+    "compare_tokens",
     "run_one",
+    "run_tokens",
     "save_table",
+    "training_table",
+    "vocabulary",
 ]

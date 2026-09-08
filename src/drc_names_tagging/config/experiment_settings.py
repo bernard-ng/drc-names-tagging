@@ -25,3 +25,7 @@ class ExperimentSettings:
     @property
     def tagging_dir(self) -> Path:
         return self.outputs_dir / "tagging"
+
+    @property
+    def token_dir(self) -> Path:
+        return self.outputs_dir / "tokens"
