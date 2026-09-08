@@ -99,7 +99,9 @@ def compare_runs(runs: Iterable[Run]) -> tuple[pl.DataFrame, pl.DataFrame]:
                 "tokens": run.table.height,
                 "unique_names": run.unique_names,
                 "elapsed_seconds": run.elapsed,
-                "tokens_per_second": run.table.height / run.elapsed if run.elapsed else 0.0,
+                "tokens_per_second": run.table.height / run.elapsed
+                if run.elapsed
+                else 0.0,
             }
             for run in completed
         ]
@@ -165,7 +167,9 @@ def run_one(
         limit=experiment.limit,
         sample_fraction=experiment.sample_fraction,
     )
-    destination = Path(output) if output else settings.tagging_dir / f"{experiment.name}.csv"
+    destination = (
+        Path(output) if output else settings.tagging_dir / f"{experiment.name}.csv"
+    )
     save_table(result.table, destination)
     logger.info(
         "Saved %d token tags from %d unique names to %s",

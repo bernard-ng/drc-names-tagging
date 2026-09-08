@@ -24,7 +24,9 @@ class NameDataset:
     def load(self) -> pl.DataFrame:
         table = pl.read_csv(assert_file(self.path))
         if "name" not in table.columns:
-            raise DatasetSchemaError(f"Dataset '{self.path}' is missing the 'name' column.")
+            raise DatasetSchemaError(
+                f"Dataset '{self.path}' is missing the 'name' column."
+            )
         table = table.with_row_index("row_index").with_columns(
             pl.col("name")
             .fill_null("")
@@ -57,7 +59,11 @@ class TokenDataset:
 class Vocabulary:
     """Cache the unique vocabulary beside its source dataset."""
 
-    schema: ClassVar = {"token_key": pl.String, "token": pl.String, "frequency": pl.Int64}
+    schema: ClassVar = {
+        "token_key": pl.String,
+        "token": pl.String,
+        "frequency": pl.Int64,
+    }
 
     def __init__(self, dataset: str | Path | None = None) -> None:
         self.source = resolve_dataset(dataset)
@@ -89,13 +95,17 @@ class Vocabulary:
         if self.path.exists() and not refresh:
             table = pl.read_csv(self.path, schema_overrides=self.schema)
             if not set(self.schema).issubset(table.columns):
-                raise DatasetSchemaError(f"Vocabulary '{self.path}' has invalid columns.")
+                raise DatasetSchemaError(
+                    f"Vocabulary '{self.path}' has invalid columns."
+                )
             return table
 
         table = self.extract(NameDataset(self.source).load())
         # Publish a complete CSV so an interrupted extraction cannot leave a
         # partial cache that a later experiment would mistake for the vocabulary.
-        with NamedTemporaryFile(dir=self.path.parent, suffix=".csv", delete=False) as stream:
+        with NamedTemporaryFile(
+            dir=self.path.parent, suffix=".csv", delete=False
+        ) as stream:
             temporary = Path(stream.name)
         try:
             table.write_csv(temporary)

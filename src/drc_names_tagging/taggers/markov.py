@@ -36,7 +36,5 @@ class Markov:
             native_score = self.native.average_log_likelihood(token.lower())
             foreign_score = self.foreign.average_log_likelihood(token.lower())
             tag = Tag.NATIVE if native_score >= foreign_score else Tag.FOREIGN
-            annotations.append(
-                Token(index, token, tag, native_score - foreign_score)
-            )
+            annotations.append(Token(index, token, tag, native_score - foreign_score))
         return Name(name, tuple(annotations))

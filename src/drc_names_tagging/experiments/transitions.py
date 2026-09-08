@@ -41,7 +41,9 @@ class TransitionBuilder:
                 "probable_native and probable_foreign."
             )
         names: list[str] = []
-        for value in tqdm(table.get_column(column), desc=f"Normalizing {column}", unit="name"):
+        for value in tqdm(
+            table.get_column(column), desc=f"Normalizing {column}", unit="name"
+        ):
             if value is not None:
                 normalized = " ".join(str(value).strip().split()).lower()
                 if normalized:

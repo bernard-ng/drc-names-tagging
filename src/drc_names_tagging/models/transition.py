@@ -48,8 +48,7 @@ class Model:
             source, target = "from_char", "to_char"
         else:
             raise KeyError(
-                "Transition CSV must contain from_letter/to_letter/probability "
-                "columns."
+                "Transition CSV must contain from_letter/to_letter/probability columns."
             )
 
         values = {

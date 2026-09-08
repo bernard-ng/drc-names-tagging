@@ -36,7 +36,9 @@ def resolve_dataset(path: str | Path | None = None) -> Path:
         root / "data" / "dataset" / "names.csv",
         root / "dataset" / "gold" / "names.csv",
     )
-    return next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
+    return next(
+        (candidate for candidate in candidates if candidate.is_file()), candidates[0]
+    )
 
 
 def assert_file(path: Path) -> Path:

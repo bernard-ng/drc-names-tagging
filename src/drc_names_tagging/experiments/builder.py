@@ -20,7 +20,9 @@ class ExperimentBuilder:
         self.settings = settings
 
     def load_templates(self, templates: str | Path | None = None) -> dict[str, Any]:
-        path = Path(templates) if templates is not None else self.settings.templates_path
+        path = (
+            Path(templates) if templates is not None else self.settings.templates_path
+        )
         if not path.is_absolute() and not path.is_file():
             path = self.settings.templates_path.parent / path
         with path.open(encoding="utf-8") as stream:
@@ -46,7 +48,9 @@ class ExperimentBuilder:
             raise TypeError("Template section 'token_workflow' must be a mapping")
         reference = workflow.get("reference_tagger", "ollama_mistral_7b")
         if not isinstance(reference, str) or not reference.strip():
-            raise ValueError("token_workflow.reference_tagger must be a non-empty string")
+            raise ValueError(
+                "token_workflow.reference_tagger must be a non-empty string"
+            )
         return reference.strip()
 
     def build(

@@ -34,7 +34,9 @@ app.add_typer(tokens_app, name="tokens")
 
 @app.command("transitions")
 def transitions_command(
-    dataset: Annotated[Path, typer.Option(help="Annotated names.csv input.")] = DEFAULT_DATASET_PATH,
+    dataset: Annotated[
+        Path, typer.Option(help="Annotated names.csv input.")
+    ] = DEFAULT_DATASET_PATH,
 ) -> None:
     """Generate native/foreign Markov transition matrices."""
 
@@ -51,16 +53,22 @@ def tag_command(
     experiment_type: Annotated[
         str, typer.Option("--type", help="Template section: baseline or advanced.")
     ] = "baseline",
-    dataset: Annotated[Path, typer.Option(help="Shared names.csv input.")] = DEFAULT_DATASET_PATH,
+    dataset: Annotated[
+        Path, typer.Option(help="Shared names.csv input.")
+    ] = DEFAULT_DATASET_PATH,
     templates: Annotated[
         Path, typer.Option(help="Experiment template definitions.")
     ] = DEFAULT_EXPERIMENT_TEMPLATES_PATH,
-    output: Annotated[Path | None, typer.Option(help="Optional CSV output path.")] = None,
+    output: Annotated[
+        Path | None, typer.Option(help="Optional CSV output path.")
+    ] = None,
 ) -> None:
     """Run one configured tagging experiment."""
 
     settings = ExperimentSettings(dataset_path=dataset, templates_path=templates)
-    experiment = ExperimentBuilder(settings).build(name, experiment_type=experiment_type)
+    experiment = ExperimentBuilder(settings).build(
+        name, experiment_type=experiment_type
+    )
     run_one(experiment, settings, output=output)
 
 
@@ -70,7 +78,8 @@ def tokens_prepare_command(
         Path, typer.Option(help="Published dataset used to build the vocabulary.")
     ] = DEFAULT_DATASET_PATH,
     refresh: Annotated[
-        bool, typer.Option(help="Rebuild the cached vocabulary after changing the dataset.")
+        bool,
+        typer.Option(help="Rebuild the cached vocabulary after changing the dataset."),
     ] = False,
 ) -> None:
     """Create or reuse the unique-token file beside the published dataset."""
@@ -88,23 +97,34 @@ def tokens_tag_command(
     experiment_type: Annotated[
         str, typer.Option("--type", help="Template section: baseline or advanced.")
     ] = "baseline",
-    dataset: Annotated[Path, typer.Option(help="Shared published dataset input.")] = DEFAULT_DATASET_PATH,
+    dataset: Annotated[
+        Path, typer.Option(help="Shared published dataset input.")
+    ] = DEFAULT_DATASET_PATH,
     templates: Annotated[
         Path, typer.Option(help="Experiment template definitions.")
     ] = DEFAULT_EXPERIMENT_TEMPLATES_PATH,
-    output: Annotated[Path | None, typer.Option(help="Optional CSV output path.")] = None,
+    output: Annotated[
+        Path | None, typer.Option(help="Optional CSV output path.")
+    ] = None,
     sample_fraction: Annotated[
         float | None,
-        typer.Option("--sample-fraction", help="Fraction of unique tokens (0 < value <= 1); overrides config."),
+        typer.Option(
+            "--sample-fraction",
+            help="Fraction of unique tokens (0 < value <= 1); overrides config.",
+        ),
     ] = None,
 ) -> None:
     """Tag every unique token once and save the lexical annotations."""
 
     settings = ExperimentSettings(dataset_path=dataset, templates_path=templates)
-    experiment = ExperimentBuilder(settings).build(name, experiment_type=experiment_type)
+    experiment = ExperimentBuilder(settings).build(
+        name, experiment_type=experiment_type
+    )
     if sample_fraction is not None:
         if not 0 < sample_fraction <= 1:
-            raise typer.BadParameter("Must be greater than 0 and at most 1.", param_hint="--sample-fraction")
+            raise typer.BadParameter(
+                "Must be greater than 0 and at most 1.", param_hint="--sample-fraction"
+            )
         experiment = replace(experiment, token_sample_fraction=sample_fraction)
     run_tokens(experiment, settings, output=output)
 
@@ -118,7 +138,9 @@ def tokens_compare_command(
     experiment_type: Annotated[
         str, typer.Option("--type", help="Template section: baseline or advanced.")
     ] = "baseline",
-    dataset: Annotated[Path, typer.Option(help="Shared published dataset input.")] = DEFAULT_DATASET_PATH,
+    dataset: Annotated[
+        Path, typer.Option(help="Shared published dataset input.")
+    ] = DEFAULT_DATASET_PATH,
     templates: Annotated[
         Path, typer.Option(help="Experiment template definitions.")
     ] = DEFAULT_EXPERIMENT_TEMPLATES_PATH,
@@ -127,7 +149,10 @@ def tokens_compare_command(
     ] = None,
     sample_fraction: Annotated[
         float | None,
-        typer.Option("--sample-fraction", help="Fraction of unique tokens (0 < value <= 1); overrides config for all annotators."),
+        typer.Option(
+            "--sample-fraction",
+            help="Fraction of unique tokens (0 < value <= 1); overrides config for all annotators.",
+        ),
     ] = None,
 ) -> None:
     """Compare unique-token annotations and save preferred training data."""
@@ -142,7 +167,9 @@ def tokens_compare_command(
     ]
     if sample_fraction is not None:
         if not 0 < sample_fraction <= 1:
-            raise typer.BadParameter("Must be greater than 0 and at most 1.", param_hint="--sample-fraction")
+            raise typer.BadParameter(
+                "Must be greater than 0 and at most 1.", param_hint="--sample-fraction"
+            )
         experiments = [
             replace(experiment, token_sample_fraction=sample_fraction)
             for experiment in experiments
@@ -164,7 +191,9 @@ def compare_command(
     experiment_type: Annotated[
         str, typer.Option("--type", help="Template section: baseline or advanced.")
     ] = "baseline",
-    dataset: Annotated[Path, typer.Option(help="Shared names.csv input.")] = DEFAULT_DATASET_PATH,
+    dataset: Annotated[
+        Path, typer.Option(help="Shared names.csv input.")
+    ] = DEFAULT_DATASET_PATH,
     templates: Annotated[
         Path, typer.Option(help="Experiment template definitions.")
     ] = DEFAULT_EXPERIMENT_TEMPLATES_PATH,
