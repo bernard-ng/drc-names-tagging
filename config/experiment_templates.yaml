@@ -1,0 +1,23 @@
+baseline_experiments:
+  - name: markov
+    description: Character-transition baseline for native/foreign token tagging.
+    tagger_type: markov
+    tagger_params:
+      native_transition: data/native_transition.csv
+      foreign_transition: data/foreign_transition.csv
+    tags: [baseline, probabilistic, character]
+    sample_fraction: 0.01
+    limit: 1000
+
+  - name: ollama_mistral_7b
+    description: Structured-output native/foreign annotation with local Mistral 7B.
+    tagger_type: ollama
+    tagger_params:
+      ollama_model: mistral:7b
+      ollama_url: http://localhost:11434
+      ollama_timeout: 120.0
+    tags: [llm, structured_output, local]
+    sample_fraction: 0.01
+    limit: 1000
+
+advanced_experiments: []

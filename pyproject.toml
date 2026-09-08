@@ -1,7 +1,7 @@
 [project]
 name = "drc-names-tagging"
 version = "0.1.0"
-description = "Probabilistic Sequence Tagging of Congolese Name Components via Markov Transitions"
+description = "Benchmarkable native/foreign token tagging for Congolese personal names"
 readme = "README.md"
 authors = [
     { name = "bernard-ng", email = "ngandubernard@gmail.com" }
@@ -11,6 +11,8 @@ dependencies = [
     "polars>=1.38.0",
     "tqdm>=4.67.3",
     "typer>=0.21.1",
+    "ollama>=0.6.2",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]
@@ -19,3 +21,21 @@ drc-names-tagging = "drc_names_tagging:main"
 [build-system]
 requires = ["uv_build>=0.8.12,<0.9.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "ruff>=0.14.13",
+]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+reportMissingModuleSource = "none"
+
+[tool.ruff]
+extend-exclude = [
+    "**/*.ipynb",
+]

@@ -9,6 +9,8 @@ wheels/
 # Virtual environments
 .venv
 dataset
+data/dataset
+data/outputs
 .idea
 .env.*
 .DS_Store

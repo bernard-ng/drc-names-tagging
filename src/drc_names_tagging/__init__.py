@@ -1,43 +1,18 @@
+"""Configuration-driven native/foreign tagging experiments."""
+
 from __future__ import annotations
 
-import logging
+from drc_names_tagging.dataset import DatasetSchemaError, NameDataset
 
-import typer
-
-from drc_names_tagging.workflow.classify import classify
-from drc_names_tagging.workflow.transitions import transitions
-
-app = typer.Typer(no_args_is_help=True)
-
-
-@app.command("transitions")
-def transitions_command() -> None:
-    """Generate Markov transitions."""
-    transitions()
-
-
-@app.command("classify")
-def classify_command() -> None:
-    """Classify each name component using Markov transitions."""
-    classify()
+__version__ = "0.2.0"
 
 
 def main() -> None:
-    configure_logging()
+    """Launch the command-line interface."""
+
+    from drc_names_tagging.cli import app
+
     app()
 
 
-__all__ = [
-    "app",
-    "main",
-]
-
-
-def configure_logging() -> None:
-    root = logging.getLogger()
-    if root.handlers:
-        return
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s : %(message)s",
-    )
+__all__ = ["DatasetSchemaError", "NameDataset", "main"]
