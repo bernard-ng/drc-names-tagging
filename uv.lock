@@ -59,6 +59,7 @@ name = "drc-names-tagging"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "ollama" },
     { name = "polars" },
     { name = "pyyaml" },
@@ -74,6 +75,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "ollama", specifier = ">=0.6.2" },
     { name = "polars", specifier = ">=1.38.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },

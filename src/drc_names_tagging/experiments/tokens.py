@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import time
-from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import combinations
@@ -12,8 +11,9 @@ import polars as pl
 from tqdm import tqdm
 
 from drc_names_tagging.config import ExperimentConfig, ExperimentSettings
-from drc_names_tagging.dataset import NameDataset
-from drc_names_tagging.models import tokens
+from drc_names_tagging.dataset import Vocabulary
+from drc_names_tagging.experiments.checkpoint import Checkpoint, signature
+from drc_names_tagging.experiments.execution import execute
 from drc_names_tagging.taggers import Registry, Tagger
 
 
@@ -26,30 +26,13 @@ class TokenRun:
     unique_tokens: int
     occurrences: int
     elapsed: float
-
-
-def vocabulary(dataset: pl.DataFrame) -> pl.DataFrame:
-    """Extract one case-insensitive row per token and retain its corpus frequency."""
-
-    counts: Counter[str] = Counter()
-    display: dict[str, str] = {}
-    for name in dataset.get_column("name").to_list():
-        for value in tokens(str(name)):
-            key = value.casefold()
-            counts[key] += 1
-            display.setdefault(key, value)
-
-    return pl.DataFrame(
-        {
-            "token_key": list(counts),
-            "token": [display[key] for key in counts],
-            "frequency": [counts[key] for key in counts],
-        }
-    )
+    cached_tokens: int = 0
+    processed_tokens: int = 0
+    batch_attempts: int = 0
 
 
 class TokenRunner:
-    """Annotate each unique lexical token once, independently of name position."""
+    """Annotate a precomputed vocabulary once per unique token."""
 
     def run(
         self,
@@ -59,53 +42,87 @@ class TokenRunner:
         limit: int | None = None,
         sample_fraction: float = 1.0,
         label: str | None = None,
+        cpu_workers: int = 1,
+        concurrency: int = 1,
+        batch_size: int = 1,
+        retries: int = 2,
+        checkpoint: Path | None = None,
     ) -> TokenRun:
         if not 0 < sample_fraction <= 1:
             raise ValueError("sample_fraction must be between zero and one")
-        selected = dataset.head(limit) if limit is not None else dataset
-        if sample_fraction < 1:
-            selected = selected.head(max(1, int(selected.height * sample_fraction)))
-        words = vocabulary(selected)
+        if limit is not None and limit <= 0:
+            raise ValueError("limit must be positive when configured")
+        if min(cpu_workers, concurrency, batch_size) < 1 or retries < 0:
+            raise ValueError(
+                "Workers and batch size must be positive; retries cannot be negative"
+            )
+        if cpu_workers > 1 and concurrency > 1:
+            raise ValueError("Select CPU workers or request concurrency, not both")
+        # Sample the vocabulary after counting the entire corpus. Sorting and a
+        # fixed seed give each annotator the same sample and retain full frequencies.
+        words = dataset.sort("token_key")
+        if sample_fraction < 1 and words.height:
+            words = words.sample(
+                n=max(1, int(words.height * sample_fraction)), seed=42, shuffle=True
+            )
+        if limit is not None:
+            words = words.head(limit)
         run_name = label or tagger.name
 
         started = time.perf_counter()
-        rows: list[dict[str, object]] = []
-        for row in tqdm(
-            words.iter_rows(named=True),
-            total=words.height,
-            desc=f"Tagging tokens with {run_name}",
-            unit="token",
-        ):
-            token = str(row["token"])
-            result = tagger.tag(token)
-            if len(result.tokens) != 1:
-                raise ValueError(
-                    f"Tagger '{tagger.name}' returned {len(result.tokens)} components "
-                    f"for the isolated token '{token}'."
+        store = Checkpoint(checkpoint, signature(tagger, batch_size))
+        processed = attempts = 0
+        failures: list[tuple[str, str]] = []
+        try:
+            pending = words.join(store.load(), on=["token_key", "token"], how="anti")
+            cached = words.height - pending.height
+            with tqdm(
+                total=words.height,
+                initial=cached,
+                desc=f"Tagging tokens with {run_name}",
+                unit="token",
+            ) as progress:
+                for result in execute(
+                    tagger,
+                    pending.get_column("token").to_list(),
+                    batch_size=batch_size,
+                    cpu_workers=cpu_workers,
+                    concurrency=concurrency,
+                    retries=retries,
+                ):
+                    store.save(result.annotations, result.failures)
+                    processed += len(result.annotations)
+                    attempts += result.attempts
+                    failures.extend(result.failures)
+                    progress.update(len(result.annotations))
+            if failures:
+                location = f"Checkpoint: {checkpoint}. " if checkpoint else ""
+                raise RuntimeError(
+                    f"{len(failures)} tokens failed after bounded retries. {location}"
+                    f"First failure: {failures[0]}. Rerun to retry unfinished tokens."
                 )
-            annotation = result.tokens[0]
-            if annotation.text.casefold() != str(row["token_key"]):
-                raise ValueError(
-                    f"Tagger '{tagger.name}' changed token '{token}' to "
-                    f"'{annotation.text}'."
+            output = (
+                words.join(
+                    store.load(),
+                    on=["token_key", "token"],
+                    how="left",
+                    maintain_order="left",
                 )
-            rows.append(
-                {
-                    "tagger": run_name,
-                    "token_key": row["token_key"],
-                    "token": row["token"],
-                    "frequency": row["frequency"],
-                    "tag": annotation.tag.value,
-                    "score": annotation.score,
-                }
+                .with_columns(pl.lit(run_name).alias("tagger"))
+                .select("tagger", "token_key", "token", "frequency", "tag", "score")
             )
+        finally:
+            store.close()
 
         return TokenRun(
             tagger=run_name,
-            table=pl.DataFrame(rows),
+            table=output,
             unique_tokens=words.height,
             occurrences=int(words.get_column("frequency").sum() or 0),
             elapsed=time.perf_counter() - started,
+            cached_tokens=cached,
+            processed_tokens=processed,
+            batch_attempts=attempts,
         )
 
 
@@ -122,8 +139,11 @@ def compare_token_runs(runs: Iterable[TokenRun]) -> tuple[pl.DataFrame, pl.DataF
                 "unique_tokens": run.unique_tokens,
                 "occurrences": run.occurrences,
                 "elapsed_seconds": run.elapsed,
+                "cached_tokens": run.cached_tokens,
+                "processed_tokens": run.processed_tokens,
+                "batch_attempts": run.batch_attempts,
                 "tokens_per_second": (
-                    run.unique_tokens / run.elapsed if run.elapsed else 0.0
+                    run.processed_tokens / run.elapsed if run.elapsed else 0.0
                 ),
             }
             for run in completed
@@ -139,9 +159,7 @@ def compare_token_runs(runs: Iterable[TokenRun]) -> tuple[pl.DataFrame, pl.DataF
                 ["token_key", "token", "frequency", pl.col("tag").alias("left_tag")]
             )
             .join(
-                right.table.select(
-                    ["token_key", pl.col("tag").alias("right_tag")]
-                ),
+                right.table.select(["token_key", pl.col("tag").alias("right_tag")]),
                 on="token_key",
                 how="inner",
             )
@@ -184,16 +202,32 @@ def run_tokens(
 ) -> Path:
     """Run one token experiment and persist its lexical annotation table."""
 
-    table = NameDataset(settings.dataset_path).load()
+    table = Vocabulary(settings.dataset_path).load()
+    destination = (
+        Path(output) if output else settings.token_dir / f"{experiment.name}.csv"
+    )
     result = TokenRunner().run(
         Registry().create(experiment),
         table,
         limit=experiment.token_limit,
         sample_fraction=experiment.token_sample_fraction,
         label=experiment.name,
+        cpu_workers=experiment.cpu_workers,
+        concurrency=experiment.concurrency,
+        batch_size=experiment.batch_size,
+        retries=experiment.retries,
+        checkpoint=destination.with_suffix(".sqlite3") if experiment.resume else None,
     )
-    destination = Path(output) if output else settings.token_dir / f"{experiment.name}.csv"
     save_table(result.table, destination)
+    _, summary = compare_token_runs([result])
+    destination.with_suffix(".json").write_text(
+        json.dumps(
+            {"experiment": experiment.to_dict(), "metrics": summary.to_dicts()[0]},
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return destination
 
 
@@ -207,8 +241,12 @@ def compare_tokens(
     """Compare token annotators and save preferred labels for later modelling."""
 
     if len(experiments) < 2:
-        raise ValueError("Token comparison requires at least two configured experiments.")
-    table = NameDataset(settings.dataset_path).load()
+        raise ValueError(
+            "Token comparison requires at least two configured experiments."
+        )
+    if reference_tagger not in {experiment.name for experiment in experiments}:
+        raise ValueError(f"Reference experiment '{reference_tagger}' was not selected")
+    table = Vocabulary(settings.dataset_path).load()
     runner = TokenRunner()
     results: list[TokenRun] = []
     destination = Path(output_dir) if output_dir else settings.token_dir
@@ -220,6 +258,13 @@ def compare_tokens(
             limit=experiment.token_limit,
             sample_fraction=experiment.token_sample_fraction,
             label=experiment.name,
+            cpu_workers=experiment.cpu_workers,
+            concurrency=experiment.concurrency,
+            batch_size=experiment.batch_size,
+            retries=experiment.retries,
+            checkpoint=(destination / f"{experiment.name}.sqlite3")
+            if experiment.resume
+            else None,
         )
         results.append(result)
         save_table(result.table, destination / f"{experiment.name}.csv")

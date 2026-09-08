@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Annotated
 
@@ -11,6 +12,7 @@ from drc_names_tagging.config import (
     DEFAULT_EXPERIMENT_TEMPLATES_PATH,
     ExperimentSettings,
 )
+from drc_names_tagging.dataset import Vocabulary
 from drc_names_tagging.experiments import (
     ExperimentBuilder,
     TransitionBuilder,
@@ -62,6 +64,22 @@ def tag_command(
     run_one(experiment, settings, output=output)
 
 
+@tokens_app.command("prepare")
+def tokens_prepare_command(
+    dataset: Annotated[
+        Path, typer.Option(help="Published dataset used to build the vocabulary.")
+    ] = DEFAULT_DATASET_PATH,
+    refresh: Annotated[
+        bool, typer.Option(help="Rebuild the cached vocabulary after changing the dataset.")
+    ] = False,
+) -> None:
+    """Create or reuse the unique-token file beside the published dataset."""
+
+    vocabulary = Vocabulary(dataset)
+    table = vocabulary.load(refresh=refresh)
+    typer.echo(f"{table.height:,} unique tokens available at {vocabulary.path}")
+
+
 @tokens_app.command("tag")
 def tokens_tag_command(
     name: Annotated[
@@ -75,11 +93,19 @@ def tokens_tag_command(
         Path, typer.Option(help="Experiment template definitions.")
     ] = DEFAULT_EXPERIMENT_TEMPLATES_PATH,
     output: Annotated[Path | None, typer.Option(help="Optional CSV output path.")] = None,
+    sample_fraction: Annotated[
+        float | None,
+        typer.Option("--sample-fraction", help="Fraction of unique tokens (0 < value <= 1); overrides config."),
+    ] = None,
 ) -> None:
     """Tag every unique token once and save the lexical annotations."""
 
     settings = ExperimentSettings(dataset_path=dataset, templates_path=templates)
     experiment = ExperimentBuilder(settings).build(name, experiment_type=experiment_type)
+    if sample_fraction is not None:
+        if not 0 < sample_fraction <= 1:
+            raise typer.BadParameter("Must be greater than 0 and at most 1.", param_hint="--sample-fraction")
+        experiment = replace(experiment, token_sample_fraction=sample_fraction)
     run_tokens(experiment, settings, output=output)
 
 
@@ -99,6 +125,10 @@ def tokens_compare_command(
     output_dir: Annotated[
         Path | None, typer.Option(help="Optional comparison output directory.")
     ] = None,
+    sample_fraction: Annotated[
+        float | None,
+        typer.Option("--sample-fraction", help="Fraction of unique tokens (0 < value <= 1); overrides config for all annotators."),
+    ] = None,
 ) -> None:
     """Compare unique-token annotations and save preferred training data."""
 
@@ -110,6 +140,13 @@ def tokens_compare_command(
     experiments = [
         builder.build(item, experiment_type=experiment_type) for item in selected
     ]
+    if sample_fraction is not None:
+        if not 0 < sample_fraction <= 1:
+            raise typer.BadParameter("Must be greater than 0 and at most 1.", param_hint="--sample-fraction")
+        experiments = [
+            replace(experiment, token_sample_fraction=sample_fraction)
+            for experiment in experiments
+        ]
     compare_tokens(
         experiments,
         settings,

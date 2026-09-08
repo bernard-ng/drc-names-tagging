@@ -16,7 +16,6 @@ from drc_names_tagging.experiments.tokens import (
     compare_tokens,
     run_tokens,
     training_table,
-    vocabulary,
 )
 from drc_names_tagging.experiments.transitions import TransitionBuilder
 
@@ -35,5 +34,4 @@ __all__ = [
     "run_tokens",
     "save_table",
     "training_table",
-    "vocabulary",
 ]

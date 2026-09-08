@@ -17,6 +17,11 @@ class ExperimentConfig:
     limit: int | None = 1_000
     token_sample_fraction: float = 1.0
     token_limit: int | None = None
+    cpu_workers: int = 1
+    concurrency: int = 1
+    batch_size: int = 1
+    retries: int = 2
+    resume: bool = True
 
     def __post_init__(self) -> None:
         name = self.name.strip()
@@ -33,6 +38,16 @@ class ExperimentConfig:
             raise ValueError("token_sample_fraction must be between zero and one")
         if self.token_limit is not None and self.token_limit <= 0:
             raise ValueError("token_limit must be positive when configured")
+        for field_name in ("cpu_workers", "concurrency", "batch_size"):
+            value = getattr(self, field_name)
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{field_name} must be a positive integer")
+        if type(self.retries) is not int or self.retries < 0:
+            raise ValueError("retries must be a non-negative integer")
+        if not isinstance(self.resume, bool):
+            raise TypeError("resume must be a boolean")
+        if self.cpu_workers > 1 and self.concurrency > 1:
+            raise ValueError("Select CPU workers or request concurrency, not both")
 
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "tagger_type", tagger_type)

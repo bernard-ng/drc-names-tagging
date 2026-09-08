@@ -76,6 +76,13 @@ uv run drc-names-tagging compare \
 
 ### Unique-token annotation
 
+The vocabulary is generated once and cached beside the local published dataset
+as `data/dataset/names_tokens.csv`, excluded from version control. Tagging and
+comparison load this shared file; if it is missing, they create it automatically.
+To prepare it explicitly, run `uv run drc-names-tagging tokens prepare`.
+After replacing the published dataset, rebuild it with
+`uv run drc-names-tagging tokens prepare --refresh`.
+
 The first annotation phase works on the vocabulary of the published dataset,
 not on every occurrence inside every name. Each distinct token is tagged once,
 then reused for comparison and training-data preparation:
@@ -89,6 +96,25 @@ their agreement, and saves the preferred annotator's labels as reusable
 training data. The preferred annotator is configured in
 `config/experiment_templates.yaml`; the default is the Mistral 7B annotator.
 The resulting files are written to `data/outputs/tokens/`.
+
+Tag the complete vocabulary with Mistral, or start with a 1% sample:
+
+```bash
+uv run drc-names-tagging tokens tag --name ollama_mistral_7b --sample-fraction 1
+uv run drc-names-tagging tokens tag --name ollama_mistral_7b --sample-fraction 0.01
+```
+
+The same option is available on `tokens compare`. Sampling is reproducible and
+applies to unique tokens extracted from the complete dataset, retaining their
+full corpus frequencies. Without this option, each experiment uses its
+`token_sample_fraction` setting (default `1.0`). An optional `token_limit` caps
+the selected vocabulary (default `null`, for no cap); the full-name `limit`
+and `sample_fraction` settings do not apply to token commands.
+
+Token experiments now support CPU workers for Markov and concurrent batches for
+Ollama. Completed batches are saved automatically: rerunning the same command
+resumes from its checkpoint. See [execution settings](docs/execution.md) for
+configuration, Ollama parallelism, and benchmarking.
 
 This lexical dataset is an intermediate resource. It can be used to refine
 transition matrices and later supervise a contextual name model, such as a
